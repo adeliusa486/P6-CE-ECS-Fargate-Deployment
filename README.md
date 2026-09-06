@@ -1,74 +1,65 @@
-# Project 6: Serverless Container Deployment with AWS ECS Fargate
+﻿# Serverless Container Deployment (AWS ECS Fargate)
 
-This project demonstrates a fully functional, highly available web application deployed as a Docker container on AWS ECS Fargate. The infrastructure is provisioned using Terraform, emphasizing a serverless compute model that eliminates the need to manage underlying EC2 instances.
+This repository contains the Terraform infrastructure code to deploy a containerized web application on AWS Fargate. 
 
-## Architecture
+The goal of this architecture was to build a highly available compute layer without the operational overhead of managing EC2 instances, patching operating systems, or configuring auto-scaling groups for virtual machines.
 
-![Architecture Diagram](assets/architecture_v2.jpg)
+## Architecture Overview
 
-The infrastructure consists of a custom Virtual Private Cloud (VPC) spanning two Availability Zones. An Internet Gateway provides public access to the Application Load Balancer (ALB) situated in the public subnets. The ECS Fargate tasks are also deployed in the public subnets, pulling the custom Docker image from a private Amazon Elastic Container Registry (ECR). Traffic routing and security are strictly controlled via Security Groups, ensuring the containers only accept HTTP traffic originating from the ALB.
+![Architecture Diagram](assets/architecture.jpg)
 
-## Key Features
+We route end-user web traffic through an Internet Gateway down to an Application Load Balancer (ALB). The ALB balances traffic across two Availability Zones for high availability. 
 
-*   Serverless Compute: Utilizes AWS Fargate to run containers without managing servers or clusters of Amazon EC2 instances
-*   Infrastructure as Code: Entire infrastructure, including networking, security, load balancing, and container orchestration, is defined and provisioned using Terraform
-*   Custom Containerization: A custom web application is packaged into a Docker image and securely stored in an AWS ECR private repository
-*   High Availability: The ECS Service is configured to maintain multiple container replicas across different Availability Zones, balancing traffic via an ALB
-*   Zero-Trust Networking: Security Groups are configured so containers explicitly drop direct internet traffic, only trusting connections forwarded by the ALB
+The application itself runs as Docker containers managed by AWS ECS Fargate. The ECS tasks pull a custom Nginx image directly from a private Amazon Elastic Container Registry (ECR). 
 
-## File Structure
+From a security perspective, we enforce a strict boundary at the Security Group level. Even though the Fargate tasks are assigned public IPs for outbound internet access, their Security Group is configured to drop all direct internet traffic. They only accept HTTP connections if the source is the Load Balancer itself.
 
-*   `Dockerfile` / `index.html`: Source files for the custom Nginx web application container.
-*   `providers.tf`: Terraform configuration specifying the AWS provider and region.
-*   `local.tf`: Local variables used for consistent naming conventions across resources.
-*   `vpc.tf`: Defines the network topology (VPC, Subnets, Internet Gateway, Route Tables).
-*   `security.tf`: Defines the Security Groups for the ALB and ECS Tasks.
-*   `iam.tf`: Defines the IAM Execution Role required by Fargate to pull images and write logs.
-*   `ecr.tf`: Provisions the private container registry.
-*   `alb.tf`: Provisions the Application Load Balancer, Target Group, and Listeners.
-*   `ecs.tf`: Provisions the ECS Cluster, Task Definition, and Service.
+## Repository Structure
 
-## Prerequisites
+*   Dockerfile & index.html: Source code for the web container.
+*   providers.tf & local.tf: Terraform backend and naming conventions.
+*   pc.tf: Network topology, including the custom VPC, subnets, and internet gateway.
+*   security.tf: Firewall rules for the ALB and ECS tasks.
+*   iam.tf: The IAM execution role allowing Fargate to pull from ECR.
+*   ecr.tf: The private container registry.
+*   lb.tf: The Application Load Balancer, target groups, and listeners.
+*   ecs.tf: The Fargate cluster, task definition, and service configurations.
 
-To deploy this project, you need:
-*   An active AWS Account
-*   AWS CLI installed and authenticated
-*   Terraform installed
-*   Docker Desktop installed and running
+## Local Deployment Guide
 
-## Deployment Steps
+To spin this up in your own AWS account, you need the AWS CLI, Docker, and Terraform installed.
 
-1.  Initialize Terraform
-    ```bash
-    terraform init
-    ```
+### 1. Build the Container Registry
 
-2.  Provision the ECR Repository First
-    ```bash
-    terraform apply -target=aws_ecr_repository.app_repo
-    ```
+Because the ECS task will crash if the Docker image does not exist yet, we have to provision the ECR repository first.
 
-3.  Authenticate Docker and Push Image
-    ```bash
-    $pass = aws ecr get-login-password --region us-east-1
-    docker login --username AWS --password $pass <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
-    docker build -t p6p7-ce-app-repo .
-    docker tag p6p7-ce-app-repo:latest <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/p6p7-ce-app-repo:latest
-    docker push <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/p6p7-ce-app-repo:latest
-    ```
+`ash
+terraform init
+terraform apply -target=aws_ecr_repository.app_repo
+`
 
-4.  Provision the Remaining Infrastructure
-    ```bash
-    terraform apply
-    ```
+### 2. Push the Docker Image
 
-## Working Application
+Authenticate your local Docker daemon with AWS, build the image, and push it to the new registry.
+
+`powershell
+$pass = aws ecr get-login-password --region us-east-1
+docker login --username AWS --password $pass <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+docker build -t p6p7-ce-app-repo .
+docker tag p6p7-ce-app-repo:latest <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/p6p7-ce-app-repo:latest
+docker push <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/p6p7-ce-app-repo:latest
+`
+
+### 3. Deploy the Infrastructure
+
+Once the image is staged in ECR, apply the rest of the Terraform code to build the network, load balancer, and compute cluster.
+
+`ash
+terraform apply
+`
 
 ![Working Website](assets/working_website.png)
 
-## Cleanup
+## Teardown
 
-To avoid incurring ongoing charges for the Application Load Balancer and running Fargate tasks, destroy the infrastructure when finished.
-    ```bash
-    terraform destroy
-    ```
+Fargate and Application Load Balancers incur hourly charges. When you are done testing, run 	erraform destroy to tear down all resources and prevent billing surprises.
