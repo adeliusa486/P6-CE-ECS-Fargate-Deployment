@@ -4,7 +4,7 @@ This project demonstrates a fully functional, highly available web application d
 
 ## Architecture
 
-![Architecture Diagram](assets/architecture.jpg)
+![Architecture Diagram](assets/architecture_v2.jpg)
 
 The infrastructure consists of a custom Virtual Private Cloud (VPC) spanning two Availability Zones. An Internet Gateway provides public access to the Application Load Balancer (ALB) situated in the public subnets. The ECS Fargate tasks are also deployed in the public subnets, pulling the custom Docker image from a private Amazon Elastic Container Registry (ECR). Traffic routing and security are strictly controlled via Security Groups, ensuring the containers only accept HTTP traffic originating from the ALB.
 
